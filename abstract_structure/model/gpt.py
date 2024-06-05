@@ -292,8 +292,34 @@ class GPT(nn.Module):
     #     self.load_state_dict(save["state_dict"])
     #     return save["epoch"], save["loss"]
 
+""" GPTPretrain"""
+class  GPTPretrain(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
 
+        self.gpt = GPT(self.config)
+        # The shape of output of GPT : (bs, n_dec_seq, d_hidn)
 
+        # Save Score for each words
+        self.projection_lm = nn.Linear(self.config.d_hidn, self.config.n_dec_vocab, bias=False)
+        #
+        # projection_lm share weight with Embedding of Decoder
+        # dec_emb(dec_inputs) = [vocab -> vector]
+        #                        : (bs, n_dec_seq, n_dec_vocab) -> (bs, n_dec_sq, d_hidn)
+        # projection_lm(dec_outputs) = [vector -> vocab]
+        #                                : (bs, n_dec_sq, d_hidn) -> (bs, n_dec_seq, n_dec_vocab)
+        # Therefore, it's fine to use the same weights (assuming they are well-trained)
+        # Using the same weights ensures consistent weights, which can improve training performance
+        # If different weights are used for vocab -> vector and vector -> vocab,
+        # the network may struggle to learn the weights effectively to enhance performance.
+        self.projection_lm.weight = self.gpt.decoder.dec_emb.weight
+
+    def forward(self, dec_inputs):
+        dec_outputs, dec_self_attn_probs = self.gpt(dec_inputs)
+        logits_lm = self.projection_lm(dec_outputs)
+
+        return logits_lm[:, :-1, :].contiguous(), dec_self_attn_probs
 
 
 "config = config.dataset_info"
