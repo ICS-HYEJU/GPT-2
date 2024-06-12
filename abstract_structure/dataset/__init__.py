@@ -38,7 +38,7 @@ def create_dataloader(config):
         out_preprocessed_file='kowiki_preprocessed.json'
     )
     #
-    train_loader = DataLoader(
+    train_dataloader = DataLoader(
         dataset_object,
         batch_size=batch_size,
         shuffle=True,
@@ -49,4 +49,4 @@ def create_dataloader(config):
     #
     #val_loader
 
-    return train_loader
+    return train_dataloader
