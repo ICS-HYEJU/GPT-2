@@ -22,7 +22,11 @@ import torch.optim as optim
 from torch.optim import AdamW as Adam
 from torch.nn import LayerNorm
 
+from ast import literal_eval
+
 from torch.utils.data import Dataset, DataLoader
+from abstract_structure.config.config import Config
+
 
 def load_subtokenzier(corpus, vocab_size):
     prefix = "kowiki_small"
@@ -43,17 +47,19 @@ class PreTrainDataset(Dataset):
                 saved_preprocessed_file=None):
 
         # Make subtokenizer using sentencepiece
-        if os.path.exists('kowiki_small.model'):
-            self.saved_vocab_file = 'kowiki_small.model'
+        if os.path.exists('/home/hjchoi/PycharmProjects/GPT-2/abstract_structure/dataset/kowiki_small.model'):
+            self.saved_vocab_file = '/home/hjchoi/PycharmProjects/GPT-2/abstract_structure/dataset/kowiki_small.model'
         else:
             self.saved_vocab_file = saved_vocab_file
         self.vocab = self.make_subtokenizer(
             corpus_file, dataset_name, vocab_size, self.saved_vocab_file)
-        #
-        if os.path.exists('kowiki_preprocessed.json'):
-            self.saved_preprocessed_file = 'kowiki_preprocessed.json'
+
+        # Make PreTrained Dataset
+        if os.path.exists('/storage/hjchoi/debug_json/preprocessed_debug.json'):
+            self.saved_preprocessed_file = '/storage/hjchoi/debug_json/preprocessed_debug.json'
         else:
             self.saved_preprocessed_file = saved_preprocessed_file
+
         self.sentences = self.make_pretrain_data(
             corpus_file, out_preprocessed_file, n_seq=n_seq,
             saved_file=self.saved_preprocessed_file
@@ -64,8 +70,8 @@ class PreTrainDataset(Dataset):
         return len(self.sentences)
 
     def __getitem__(self, item):
-        return (torch.tensor(self.sentences[item]),torch.tensor(item))
-
+        # return (torch.tensor(self.sentences), torch.tensor(item))
+        return (torch.tensor(self.sentences[item]), torch.tensor(item))
     def make_subtokenizer(self, corpus_file, dataset_name, vocab_size, saved_vocab_file=None):
         # Load saved vocab file when it exists.
         if saved_vocab_file is not None:
@@ -115,7 +121,7 @@ class PreTrainDataset(Dataset):
                     tokens = tokens[:tgt_seq]
                     if 1 < len(tokens):
                         instance = {
-                            "tokens": ["[BOS]"] + tokens + ["[EOS]"]
+                            "tokens": self.vocab.PieceToId(["[BOS]"] + tokens + ["[EOS]"])
                         }
                         instances.append(instance)
                 current_chunk = []
@@ -128,17 +134,18 @@ class PreTrainDataset(Dataset):
 
         if saved_file is not None:
             assert os.path.exists(saved_file), 'There is no file...{}'.format(saved_file)
-
+            #
+            print("[PreTrain Data] Counting the number of lines...")
             line_cnt = 0
-            with open(saved_file,'r') as f:
+            with open(saved_file, 'r') as f:
                 for line in f:
                     line_cnt += 1
-
-            with open(saved_file,'r') as f:
+            print("[PreTrain Data] Counting Completed...")
+            #
+            with open(saved_file, 'r') as f:
                 for i, line in enumerate(tqdm(f, total=line_cnt, desc="Loading and Making Pretrain Dataset", unit="lines")):
                     instance = json.loads(line)
-                    # Integer Encoding by using PieceToId of spm
-                    sentences.append([self.vocab.PieceToId(p) for p in instance["tokens"]])
+                    sentences.append(instance['tokens'])
 
             print("[PreTrain Data] Loading Completed...")
 
@@ -148,6 +155,8 @@ class PreTrainDataset(Dataset):
             line_cnt = 0
             with open(in_file, "r") as in_f:
                 for line in in_f:
+                    if line_cnt == 1000:
+                        break
                     line_cnt += 1
 
             docs = []
@@ -168,7 +177,8 @@ class PreTrainDataset(Dataset):
                         if doc:
                             docs.append(doc)
 
-            with open(out_file, "w") as out_f:
+            # with open(out_file, "w") as out_f:
+            with open('/storage/hjchoi/debug_json/preprocessed_debug.json', "w") as out_f:
                 with tqdm(total=len(docs), desc=f"Making") as pbar:
                     for i, doc in enumerate(docs):
                         instances = self.create_pretrain_instances(doc, n_seq)
@@ -176,7 +186,7 @@ class PreTrainDataset(Dataset):
                             out_f.write(json.dumps(instance))
                             out_f.write("\n")
                             #
-                            sentences.append([self.vocab.PieceToId(p) for p in instance["tokens"]])
+                            sentences.append(instance['tokens'])
                         pbar.update(1)
         print("[PreTrain Data] Making Completed...")
 
@@ -203,10 +213,22 @@ class PreTrainDataset(Dataset):
 if __name__ == "__main__":
     from abstract_structure.config.config import get_config_dict
 
-    config = get_config_dict()
+    config = Config(get_config_dict())
+    config = Config(config.dataset_info)
 
-    path = config["dataset_info"]["path"]
+    path = config.path
 
     obj = PreTrainDataset(corpus_file=path+'/corpus.txt', dataset_name="kowiki_small",
                           vocab_size=8000,
-                          out_preprocessed_file='kowiki_preprocessed.json')
+                          out_preprocessed_file='preprocessed_debug.json',
+                          )
+    #
+    # obj.__getitem__(10)
+    obj_dataloader = DataLoader(
+        obj,
+        batch_size=3,
+        shuffle=True,
+        collate_fn=PreTrainDataset.collate_fn
+    )
+    for i, data in enumerate(obj_dataloader):
+        print(data)
