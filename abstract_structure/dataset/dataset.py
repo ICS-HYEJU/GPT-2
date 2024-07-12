@@ -228,7 +228,6 @@ if __name__ == "__main__":
                           out_preprocessed_file='kowiki_preprocessed.json',
                           )
     #
-    obj.__getitem__(10)
     obj_dataloader = DataLoader(
         obj,
         batch_size=3,
