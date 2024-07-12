@@ -85,7 +85,6 @@ def get_config_dict():
     config = dict(
         dataset_info = dataset_info,
         path = path,
-        #subtokenizer = subtokenizer,
         model = model,
         solver = solver,
         scheduler = scheduler,
