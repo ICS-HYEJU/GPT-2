@@ -161,6 +161,7 @@ if __name__ == '__main__':
 
     # Get configuration
     cfg = get_config_dict()
+    # Set Device
     if cfg['device'] is not None:
         device = torch.device('cuda:{}'.format(cfg['device']))
         torch.cuda.set_device(cfg['device'])
