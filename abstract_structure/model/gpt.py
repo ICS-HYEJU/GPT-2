@@ -185,7 +185,7 @@ class Decoder(nn.Module):
         # The self.pos_emb below simply uses the sinusoid_table and is not trained.
         # When using nn.Embedding, the weights in the table are updated through training.
         self.pos_emb = nn.Embedding.from_pretrained(sinusoid_table, freeze=True)
-        # ====================================
+        # =====================================
 
         # ======= Structure of Decoder =======
         self.layers = nn.ModuleList([DecoderLayer(self.config) for _ in range(self.config['n_layer'])])
