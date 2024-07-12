@@ -22,16 +22,8 @@ import torch.optim as optim
 from torch.optim import AdamW as Adam
 from torch.nn import LayerNorm
 
-# This function that allows access to dictionary keys using '.' instead of '[]'
-class Config(dict):
-    __getattr__ = dict.__getitem__
-    __setattr__ = dict.__setitem__
+from abstract_structure.config.config import Config
 
-    @classmethod
-    def load(cls, file):
-        with open(file, 'r') as f:
-            config = json.load(f)
-            return Config(config)
 
 # Positional Encoding
 """
@@ -58,10 +50,11 @@ def get_sinusoid_encoding_table(n_seq, d_hidn):
 class MultiHeadAttention(nn.Module):
     def __init__(self, config):
         super().__init__()
+        self.config = Config(config)
 
-        self.d_hidn = config.d_hidn
-        self.n_head = config.n_head
-        self.d_head = config.d_head
+        self.d_hidn = config['d_hidn']
+        self.n_head = config['n_head']
+        self.d_head = config['d_head']
 
         self.W_Q = nn.Linear(self.d_hidn, self.n_head*self.d_head)
         self.W_K = nn.Linear(self.d_hidn, self.n_head*self.d_head)
@@ -89,7 +82,7 @@ class MultiHeadAttention(nn.Module):
         # (bs, n_head, n_q_seq, n_k_seq)
 
         context, attn_prob = self.scaled_dot_attn(q_s, k_s, v_s, attn_mask)
-        context = context.transpose(1,2).contiguous().view(batch_size, -1, self.n_haed*self.d_head)
+        context = context.transpose(1,2).contiguous().view(batch_size, -1, self.n_head*self.d_head)
         # (bs, n_q_seq,  n_head, d_head).view(bs, -1, n_head*d_head) = (bs, 256, 256) = (bs, n_seq, n_head*d_head)
         output = self.linear(context)
 
@@ -130,11 +123,11 @@ class ScaledDotProductAttention(nn.Module):
 class PoswiseFeedForwardNet(nn.Module):
     def __init__(self,config):
         super().__init__()
-
-        self.conv1 = nn.Conv1d(in_channels=config.d_hind,
-                               out_channels=config.d_hind*4, kernel_size=1)
-        self.conv2 = nn.Conv1d(in_channels=config.d_hind * 4,
-                               out_channels=config.d_hind, kernel_size=1)
+        self.config = Config(config)
+        self.conv1 = nn.Conv1d(in_channels=config['d_hidn'],
+                               out_channels=config['d_hidn']*4, kernel_size=1)
+        self.conv2 = nn.Conv1d(in_channels=config['d_hidn'] * 4,
+                               out_channels=config['d_hidn'], kernel_size=1)
         self.active = F.gelu
 
     def forward(self,inputs):
@@ -149,12 +142,12 @@ class PoswiseFeedForwardNet(nn.Module):
 class DecoderLayer(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.config = config
+        self.config = Config(config)
 
         self.self_attn = MultiHeadAttention(self.config)
-        self.layer_norm1 = nn.LayerNorm(self.config.d_hind, eps=self.config.layer_norm_eps)
+        self.layer_norm1 = nn.LayerNorm(self.config['d_hidn'], eps=self.config['layer_norm_eps'])
         self.pos_ffn = PoswiseFeedForwardNet(self.config)
-        self.layer_norm2 = nn.LayerNorm(self.config.d_hind, eps=self.config.layer_norm_eps)
+        self.layer_norm2 = nn.LayerNorm(self.config['d_hidn'], eps=self.config['layer_norm_eps'])
 
     def forward(self, dec_inputs, self_attn_mask):
         # dec_inputs shape : (bs,n_seq, d_hidn)
@@ -167,7 +160,7 @@ class DecoderLayer(nn.Module):
 
         ffn_outputs = self.pos_ffn(self_att_outputs)
         #(bs,n_seq, d_hidn)
-        ffn_outputs =self.layer_nomr2(ffn_outputs + self_att_outputs)      #skip connection
+        ffn_outputs =self.layer_norm2(ffn_outputs + self_att_outputs)      #skip connection
 
         return ffn_outputs, self_attn_prob
 
@@ -175,19 +168,19 @@ class DecoderLayer(nn.Module):
 class Decoder(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.config = config
+        self.config = Config(config['dataset_info'])
 
         # ======== Embedding Functions ========
         #   1) vocabulary embeddings
-        #      : (bs, n_dec_seq, n_dec_vocab) ---(nn.Embedding)---> (bs, n_dec_seq, d_hidn)
-        self.dec_emb = nn.Embedding(self.config.n_dec_vocab, self.config.d_hdin)
+        #      : (bs, n_dec_seq, n_dec_vocab) ---(nn.Embedding)---> ( n_dec_seq, d_hidn)
+        self.dec_emb = nn.Embedding(self.config['n_dec_vocab'], self.config['d_hidn'])
         #
         #   2) positional encoding
         #       : (bs, n_dec_seq+1, 1) ---(postional_encoding)--> (bs, n_dec_seq+1, d_hidn)
         #       : def get_sinusoid_encoding_table(n_dec_seq, d_hidn) : Generate [n_dec_seq+1, d_hidn] table
         #           - This table has positinal encoding vector at each position
         sinusoid_table = torch.FloatTensor(
-            get_sinusoid_encoding_table(self.config.n_dec_seq+1, self.config.d_hidn)
+            get_sinusoid_encoding_table(self.config['n_dec_seq']+1, self.config['d_hidn'])
         )
         # The self.pos_emb below simply uses the sinusoid_table and is not trained.
         # When using nn.Embedding, the weights in the table are updated through training.
@@ -195,7 +188,7 @@ class Decoder(nn.Module):
         # ====================================
 
         # ======= Structure of Decoder =======
-        self.layers = nn.ModuleList([DecoderLayer(self.config) for _ in range(self.config.n_layer)])
+        self.layers = nn.ModuleList([DecoderLayer(self.config) for _ in range(self.config['n_layer'])])
         # ====================================
 
     def forward(self, dec_inputs):
@@ -280,29 +273,29 @@ class GPT(nn.Module):
         #
         return dec_outputs, dec_self_attns_prob
 
-    # def save(self, epoch, loss, path):
-    #     torch.save({
-    #         'epoch': epoch,
-    #         'loss':loss,
-    #         'state_dict':self.state_dict()
-    #     }, path)
-    #
-    # def load(self, path):
-    #     save = torch.load(path)
-    #     self.load_state_dict(save["state_dict"])
-    #     return save["epoch"], save["loss"]
+    def save(self, epoch, loss, path):
+        torch.save({
+            'epoch': epoch,
+            'loss':loss,
+            'state_dict':self.state_dict()
+        }, path + self.config.weight_info['name'])
+
+    def load(self, path):
+        save = torch.load(path)
+        self.load_state_dict(save["state_dict"])
+        return save["epoch"], save["loss"]
 
 """ GPTPretrain"""
 class  GPTPretrain(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.config = config
+        self.config = Config(config)
 
         self.gpt = GPT(self.config)
         # The shape of output of GPT : (bs, n_dec_seq, d_hidn)
 
         # Save Score for each words
-        self.projection_lm = nn.Linear(self.config.d_hidn, self.config.n_dec_vocab, bias=False)
+        self.projection_lm = nn.Linear(self.config.dataset_info['d_hidn'], self.config.dataset_info['n_dec_vocab'], bias=False)
         #
         # projection_lm share weight with Embedding of Decoder
         # dec_emb(dec_inputs) = [vocab -> vector]
@@ -321,5 +314,3 @@ class  GPTPretrain(nn.Module):
 
         return logits_lm[:, :-1, :].contiguous(), dec_self_attn_probs
 
-
-"config = config.dataset_info"

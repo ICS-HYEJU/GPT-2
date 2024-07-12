@@ -47,18 +47,18 @@ class PreTrainDataset(Dataset):
                 saved_preprocessed_file=None):
 
         # Make subtokenizer using sentencepiece
-        if os.path.exists('/home/hjchoi/PycharmProjects/GPT-2/abstract_structure/dataset/kowiki_small.model'):
-            self.saved_vocab_file = '/home/hjchoi/PycharmProjects/GPT-2/abstract_structure/dataset/kowiki_small.model'
-        else:
-            self.saved_vocab_file = saved_vocab_file
+        # if os.path.exists('/home/hjchoi/PycharmProjects/GPT-2/abstract_structure/dataset/kowiki_small.model'):
+        #     self.saved_vocab_file = '/home/hjchoi/PycharmProjects/GPT-2/abstract_structure/dataset/kowiki_small.model'
+        # else:
+        self.saved_vocab_file = saved_vocab_file
         self.vocab = self.make_subtokenizer(
             corpus_file, dataset_name, vocab_size, self.saved_vocab_file)
 
         # Make PreTrained Dataset
-        if os.path.exists('/storage/hjchoi/debug_json/preprocessed_debug.json'):
-            self.saved_preprocessed_file = '/storage/hjchoi/debug_json/preprocessed_debug.json'
-        else:
-            self.saved_preprocessed_file = saved_preprocessed_file
+        # if os.path.exists('/storage/hjchoi/debug_json/preprocessed_debug.json'):
+        #     self.saved_preprocessed_file = '/storage/hjchoi/debug_json/preprocessed_debug.json'
+        # else:
+        self.saved_preprocessed_file = saved_preprocessed_file
 
         self.sentences = self.make_pretrain_data(
             corpus_file, out_preprocessed_file, n_seq=n_seq,
@@ -135,7 +135,7 @@ class PreTrainDataset(Dataset):
         if saved_file is not None:
             assert os.path.exists(saved_file), 'There is no file...{}'.format(saved_file)
             #
-            print("[PreTrain Data] Counting the number of lines...")
+            print("[PreTrain Data] Counting the number of` lines...")
             line_cnt = 0
             with open(saved_file, 'r') as f:
                 for line in f:
@@ -146,6 +146,8 @@ class PreTrainDataset(Dataset):
                 for i, line in enumerate(tqdm(f, total=line_cnt, desc="Loading and Making Pretrain Dataset", unit="lines")):
                     instance = json.loads(line)
                     sentences.append(instance['tokens'])
+                    if i > 128:
+                        break
 
             print("[PreTrain Data] Loading Completed...")
 
@@ -155,8 +157,6 @@ class PreTrainDataset(Dataset):
             line_cnt = 0
             with open(in_file, "r") as in_f:
                 for line in in_f:
-                    if line_cnt == 1000:
-                        break
                     line_cnt += 1
 
             docs = []
@@ -178,7 +178,7 @@ class PreTrainDataset(Dataset):
                             docs.append(doc)
 
             # with open(out_file, "w") as out_f:
-            with open('/storage/hjchoi/debug_json/preprocessed_debug.json', "w") as out_f:
+            with open('/home/hjchoi/PycharmProjects/GPT-2/abstract_structure/dataset/kowiki_preprocessed.json', "w") as out_f:
                 with tqdm(total=len(docs), desc=f"Making") as pbar:
                     for i, doc in enumerate(docs):
                         instances = self.create_pretrain_instances(doc, n_seq)
@@ -210,6 +210,11 @@ class PreTrainDataset(Dataset):
         ]
         return batch
 
+
+
+
+
+
 if __name__ == "__main__":
     from abstract_structure.config.config import get_config_dict
 
@@ -220,10 +225,10 @@ if __name__ == "__main__":
 
     obj = PreTrainDataset(corpus_file=path+'/corpus.txt', dataset_name="kowiki_small",
                           vocab_size=8000,
-                          out_preprocessed_file='preprocessed_debug.json',
+                          out_preprocessed_file='kowiki_preprocessed.json',
                           )
     #
-    # obj.__getitem__(10)
+    obj.__getitem__(10)
     obj_dataloader = DataLoader(
         obj,
         batch_size=3,
@@ -232,3 +237,4 @@ if __name__ == "__main__":
     )
     for i, data in enumerate(obj_dataloader):
         print(data)
+
